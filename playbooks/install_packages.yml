@@ -1,0 +1,26 @@
+---
+- name: Install common packages on dudlab cluster
+  hosts: dudlab_cluster
+  become: yes
+  tasks:
+    - name: Install utilities apt
+      ansible.builtin.apt:
+        name:
+          - curl
+          - vim
+          - htop
+          - git
+          - avahi-daemon
+          - ansible
+          - dash
+          - gzip
+          - net-tools
+          - postgresql
+          - ufw
+          - docker
+        state: present
+    - name: Install utilities snap
+      ansible.builtin.snap:
+        name:
+          - docker
+        state: present

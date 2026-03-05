@@ -1,0 +1,15 @@
+# vars.yml
+ansible_user: dudley
+opentopas_user: dudley
+applications_dir: "{{ ansible_env.HOME }}/Applications"
+geant4_version: "11.1.3"
+geant4_tar: "geant4-v11.1.3.tar.gz"
+geant4_url: "https://gitlab.cern.ch/geant4/geant4/-/archive/v11.1.3/geant4-v11.1.3.tar.gz"
+geant4_dir: "{{ ansible_env.HOME }}/Applications/GEANT4"
+g4data_dir: "{{ ansible_env.HOME }}/Applications/GEANT4/G4DATA"
+open_topas_dir: "{{ ansible_env.HOME }}/Applications/TOPAS"
+open_topas_src: "{{ ansible_env.HOME }}/Applications/TOPAS/OpenTOPAS"
+gdcm_tar: "gdcm-2.6.8.tar.gz"
+gdcm_dir: "{{ ansible_env.HOME }}/Applications/GDCM"
+shell_scripts_dir: "{{ ansible_env.HOME }}/shellScripts"
+skip_open_topas_build: true

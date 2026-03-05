@@ -1,0 +1,34 @@
+---
+- name: Configure firewall on dudlab cluster
+  hosts: dudlab_cluster
+  become: yes
+  tasks:
+    - name: Install UFW
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+
+    - name: Allow SSH connections
+      ansible.builtin.ufw:
+        rule: allow
+        port: 22
+        proto: tcp
+
+    - name: Allow Kubernetes API server access on port 6443/tcp
+      ansible.builtin.ufw:
+        rule: allow
+        port: 6443
+        proto: tcp
+
+    - name: Enable UFW
+      ansible.builtin.ufw:
+        state: enabled
+
+    - name: Check UFW status
+      become: yes
+      command: ufw status numbered
+      register: ufw_status_output
+
+    - name: Display UFW status
+      debug:
+        var: ufw_status_output.stdout

@@ -1,0 +1,7 @@
+---
+- name: Test connection to the dudlab-cluster
+  hosts: dudlab_cluster
+  gather_facts: false
+  tasks:
+    - name: Ping all nodes
+      ansible.builtin.ping:
