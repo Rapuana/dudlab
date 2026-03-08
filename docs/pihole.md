@@ -50,7 +50,7 @@ All three share the same IP via MetalLB's `allow-shared-ip` annotation.
 Pi-hole's blocklist database and configuration are stored on a Longhorn PVC — so they persist across pod restarts and node failovers.
 
 **Admin UI:** `http://192.168.0.241/admin`
-**Password:** `dudlab-pihole` (change this after first login)
+**Password:** stored in ansible-vault (`vault_pihole_password`) — change after first login
 
 ## Activating network-wide ad-blocking
 

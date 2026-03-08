@@ -1,0 +1,35 @@
+---
+# Helm values for kube-prometheus-stack
+# Applied via: helm upgrade --install ... --values /tmp/kube-prometheus-stack-values.yml
+# The --set flags in the playbook handle: grafana.service.type, loadBalancerIP, adminPassword
+
+prometheus:
+  prometheusSpec:
+    # By default kube-prometheus-stack only scrapes ServiceMonitors with the same
+    # 'release' label. Setting these to empty selectors makes Prometheus pick up
+    # ALL ServiceMonitors in ALL namespaces — the right default for a homelab.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector: {}
+
+grafana:
+  # Auto-provision community dashboards via the grafana-sc-dashboard sidecar.
+  # The sidecar watches for ConfigMaps labelled grafana_dashboard=1 and hot-loads them.
+  # Each entry below creates one such ConfigMap by downloading the dashboard JSON
+  # from grafana.com at deploy time.
+  dashboards:
+    default:
+      # Per-node CPU, RAM, disk, network I/O, load avg — the definitive node dashboard
+      node-exporter-full:
+        gnetId: 1860
+        revision: 37
+        datasource: Prometheus
+      # Kubernetes cluster overview — pod/deployment/namespace summary
+      kubernetes-cluster:
+        gnetId: 7249
+        revision: 1
+        datasource: Prometheus
+      # Note: Network Probes and Internet Speed dashboards are provisioned via
+      # ConfigMaps by deploy_network_monitoring.yml — not listed here.

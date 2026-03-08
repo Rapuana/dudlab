@@ -24,6 +24,12 @@
         stdin: "{{ monitoring_ns.stdout }}"
       changed_when: false
 
+    - name: Copy kube-prometheus-stack values file to host
+      ansible.builtin.copy:
+        src: files/kube-prometheus-stack-values.yml
+        dest: /tmp/kube-prometheus-stack-values.yml
+        mode: "0644"
+
     - name: Install kube-prometheus-stack via Helm
       ansible.builtin.command:
         cmd: >
@@ -34,6 +40,7 @@
           --set grafana.service.type=LoadBalancer
           --set grafana.service.loadBalancerIP={{ grafana_ip }}
           --set grafana.adminPassword={{ grafana_admin_password }}
+          --values /tmp/kube-prometheus-stack-values.yml
           --wait --timeout 10m
       changed_when: false
 

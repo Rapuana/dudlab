@@ -27,6 +27,7 @@ helm_version: "v3.20.0"
 longhorn_chart_version: "1.11.0"
 portainer_chart_version: "239.0.2"
 kube_prometheus_stack_chart_version: "82.10.1"
+blackbox_exporter_chart_version: "11.8.0"   # verify: helm search repo prometheus-community/prometheus-blackbox-exporter
 pihole_chart_version: "2.35.0"
 
 # Sensitive variables — sourced from vault.yml (ansible-vault encrypted)

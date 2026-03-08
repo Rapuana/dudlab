@@ -1,0 +1,77 @@
+---
+# speedtest-exporter — runs Ookla speedtest-cli on demand and exposes results
+# as Prometheus metrics: download/upload Mbps, ping ms, jitter ms.
+#
+# Image: github.com/miguelndecarvalho/speedtest-exporter
+# Scrape interval is 5m because each test takes ~30s. The Prometheus scrape
+# timeout is set to 90s to give the test time to complete.
+#
+# The ServiceMonitor is picked up by the Prometheus Operator because we set
+# serviceMonitorSelector: {} in kube-prometheus-stack-values.yml.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: speedtest-exporter
+  namespace: monitoring
+  labels:
+    app: speedtest-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: speedtest-exporter
+  template:
+    metadata:
+      labels:
+        app: speedtest-exporter
+    spec:
+      containers:
+        - name: speedtest-exporter
+          image: ghcr.io/miguelndecarvalho/speedtest-exporter:v3.5.4
+          ports:
+            - name: metrics
+              containerPort: 9798
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: speedtest-exporter
+  namespace: monitoring
+  labels:
+    app: speedtest-exporter
+spec:
+  selector:
+    app: speedtest-exporter
+  ports:
+    - name: metrics
+      port: 9798
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: speedtest-exporter
+  namespace: monitoring
+  labels:
+    app: speedtest-exporter
+spec:
+  selector:
+    matchLabels:
+      app: speedtest-exporter
+  endpoints:
+    - port: metrics
+      # Run a full speedtest every 5 minutes. Each test takes ~30s,
+      # so scrapeTimeout must be well above that.
+      interval: 5m
+      scrapeTimeout: 90s
+      path: /metrics

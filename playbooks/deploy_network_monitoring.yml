@@ -1,0 +1,118 @@
+---
+- name: Deploy network monitoring (blackbox exporter + speedtest exporter)
+  hosts: k3s_master_node
+  become: true
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  tasks:
+    - name: Add prometheus-community Helm repo
+      ansible.builtin.command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      changed_when: false
+
+    - name: Update Helm repos
+      ansible.builtin.command: helm repo update
+      changed_when: false
+
+    - name: Copy blackbox-exporter values file to host
+      ansible.builtin.copy:
+        src: files/blackbox-exporter-values.yml
+        dest: /tmp/blackbox-exporter-values.yml
+        mode: "0644"
+
+    - name: Install blackbox-exporter via Helm
+      ansible.builtin.command:
+        cmd: >
+          helm upgrade --install blackbox-exporter
+          prometheus-community/prometheus-blackbox-exporter
+          --namespace monitoring
+          --version {{ blackbox_exporter_chart_version }}
+          --values /tmp/blackbox-exporter-values.yml
+          --wait --timeout 5m
+      changed_when: false
+
+    - name: Copy speedtest-exporter manifest to host
+      ansible.builtin.copy:
+        src: files/speedtest-exporter.yml
+        dest: /tmp/speedtest-exporter.yml
+        mode: "0644"
+
+    - name: Apply speedtest-exporter manifest
+      ansible.builtin.command: kubectl apply -f /tmp/speedtest-exporter.yml
+      changed_when: false
+
+    - name: Wait for speedtest-exporter to be ready
+      ansible.builtin.command: >
+        kubectl wait deployment speedtest-exporter
+        --namespace monitoring
+        --for=condition=Available
+        --timeout=120s
+      changed_when: false
+
+    # Grafana dashboards — provisioned as ConfigMaps so the grafana-sc-dashboard
+    # sidecar picks them up automatically. No manual import required.
+    # The sidecar watches for ConfigMaps labelled grafana_dashboard=1 in any namespace.
+    - name: Copy network-probes dashboard to host
+      ansible.builtin.copy:
+        src: files/dashboards/network-probes.json
+        dest: /tmp/network-probes.json
+        mode: "0644"
+
+    - name: Copy internet-speed dashboard to host
+      ansible.builtin.copy:
+        src: files/dashboards/internet-speed.json
+        dest: /tmp/internet-speed.json
+        mode: "0644"
+
+    - name: Render network-probes ConfigMap manifest
+      ansible.builtin.command:
+        cmd: >
+          kubectl create configmap grafana-dashboard-network-probes
+          --from-file=network-probes.json=/tmp/network-probes.json
+          --namespace monitoring
+          --dry-run=client -o yaml
+      register: network_probes_cm
+      changed_when: false
+
+    - name: Label network-probes ConfigMap for Grafana sidecar
+      ansible.builtin.set_fact:
+        network_probes_labeled: >-
+          {{ network_probes_cm.stdout | from_yaml
+             | combine({'metadata': {'labels': {'grafana_dashboard': '1'}}}, recursive=True)
+             | to_yaml }}
+
+    - name: Apply network-probes dashboard ConfigMap
+      ansible.builtin.command: kubectl apply -f -
+      args:
+        stdin: "{{ network_probes_labeled }}"
+      changed_when: false
+
+    - name: Render internet-speed ConfigMap manifest
+      ansible.builtin.command:
+        cmd: >
+          kubectl create configmap grafana-dashboard-internet-speed
+          --from-file=internet-speed.json=/tmp/internet-speed.json
+          --namespace monitoring
+          --dry-run=client -o yaml
+      register: internet_speed_cm
+      changed_when: false
+
+    - name: Label internet-speed ConfigMap for Grafana sidecar
+      ansible.builtin.set_fact:
+        internet_speed_labeled: >-
+          {{ internet_speed_cm.stdout | from_yaml
+             | combine({'metadata': {'labels': {'grafana_dashboard': '1'}}}, recursive=True)
+             | to_yaml }}
+
+    - name: Apply internet-speed dashboard ConfigMap
+      ansible.builtin.command: kubectl apply -f -
+      args:
+        stdin: "{{ internet_speed_labeled }}"
+      changed_when: false
+
+    - name: Display network monitoring info
+      ansible.builtin.debug:
+        msg:
+          - "Network monitoring deployed."
+          - "Blackbox exporter: probing 1.1.1.1, 8.8.8.8, google.com every 60s"
+          - "Speedtest exporter: running Ookla tests every 5m (first result takes ~30s)"
+          - "Dashboards: 'Network Probes' and 'Internet Speed' auto-loaded in Grafana"

@@ -28,5 +28,8 @@
 - name: Deploy Grafana
   import_playbook: playbooks/deploy_grafana.yml
 
+- name: Deploy network monitoring
+  import_playbook: playbooks/deploy_network_monitoring.yml
+
 - name: Deploy Pi-hole
   import_playbook: playbooks/deploy_pihole.yml

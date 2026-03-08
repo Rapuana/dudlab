@@ -25,24 +25,67 @@ Together they give you a complete picture of what the cluster is doing and how h
 
 ## Setup in dudlab
 
-Deployed via Helm:
+Deployed via Helm with a values file at `playbooks/files/kube-prometheus-stack-values.yml`. The values file handles:
 
-```bash
-helm upgrade --install kube-prometheus-stack \
-  prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --set grafana.service.type=LoadBalancer \
-  --set grafana.service.loadBalancerIP=192.168.0.243 \
-  --set grafana.adminPassword=dudlab-admin
-```
+- Prometheus `serviceMonitorSelector: {}` — makes Prometheus pick up ALL ServiceMonitors across all namespaces, not just ones labelled for kube-prometheus-stack. Required for the blackbox and speedtest exporters to be scraped.
+- Grafana dashboard provisioning via the grafana-sc-dashboard sidecar.
 
 Grafana is accessible at `http://192.168.0.243`.
 
-**Default credentials:**
-- Username: `admin`
-- Password: `dudlab-admin` — change this after first login
+**Credentials:** username `admin`, password stored in ansible-vault (`vault_grafana_admin_password`).
 
 Prometheus runs internally (no external IP) — it's only accessed by Grafana.
+
+## Network monitoring extras
+
+Two additional exporters are deployed by `deploy_network_monitoring.yml`:
+
+### Blackbox Exporter
+
+Probes remote targets and reports whether they're reachable and how long they take to respond. Runs every 60 seconds against:
+
+| Target | Probe type |
+|--------|-----------|
+| `1.1.1.1` (Cloudflare DNS) | ICMP ping |
+| `8.8.8.8` (Google DNS) | ICMP ping |
+| `https://www.google.com` | HTTP 2xx |
+| `https://1.1.1.1` (Cloudflare) | HTTP 2xx |
+
+Key metrics: `probe_success` (1=up, 0=down), `probe_duration_seconds` (round-trip latency).
+
+### Speedtest Exporter
+
+Runs an Ookla speedtest every 5 minutes and exposes the results as Prometheus metrics. Each test takes ~30 seconds.
+
+Key metrics: `speedtest_download_bits_per_second`, `speedtest_upload_bits_per_second`, `speedtest_ping_latency_milliseconds`, `speedtest_jitter_latency_milliseconds`.
+
+## Dashboards
+
+### Pre-built (shipped with kube-prometheus-stack)
+
+Go to **Dashboards → Browse** on first login:
+
+**Kubernetes dashboards**
+- **Kubernetes / Compute Resources / Cluster** — overall CPU and memory usage across the cluster
+- **Kubernetes / Compute Resources / Node** — per-node breakdown
+- **Kubernetes / Compute Resources / Namespace** — per-namespace resource usage
+- **Kubernetes / Compute Resources / Pod** — per-pod CPU/memory over time
+- **Kubernetes / Persistent Volumes** — PVC usage (see how full your Longhorn volumes are)
+
+**Node dashboards**
+- **Node Exporter / Nodes** — full hardware metrics: CPU, disk I/O, network throughput, RAM, load
+
+### Provisioned via ConfigMaps (auto-loaded, no import needed)
+
+These dashboards are stored in `playbooks/files/dashboards/` and provisioned as ConfigMaps labelled `grafana_dashboard=1`. The Grafana sidecar picks them up automatically within ~30s of deploy.
+
+- **Network Probes** — probe status (up/down), probe duration, and probe success over time for all blackbox targets
+- **Internet Speed** — download/upload Mbps, ping, and jitter over time from speedtest results
+
+### Community dashboards (downloaded from grafana.com at deploy time)
+
+- **Node Exporter Full** (ID 1860) — comprehensive per-node metrics, more detailed than the built-in node dashboard
+- **Kubernetes Cluster** (ID 7249) — cluster overview
 
 ## Where it sits in the architecture
 
@@ -54,6 +97,9 @@ Every node
     │
     ▼
 Prometheus (scrapes metrics every 30s, stores time-series data)
+    ▲
+    ├── Blackbox Exporter (internet ping + HTTP probes every 60s)
+    └── Speedtest Exporter (bandwidth test every 5m)
     │
     ▼
 Grafana (queries Prometheus, renders dashboards)
@@ -61,26 +107,6 @@ Grafana (queries Prometheus, renders dashboards)
     ▼
 Browser → http://192.168.0.243
 ```
-
-kube-state-metrics also feeds Prometheus with cluster-level data (how many pods are running, are deployments healthy, etc.).
-
-## What you can see out of the box
-
-The Helm chart installs a full set of pre-built dashboards. On first login, go to **Dashboards → Browse**:
-
-### Kubernetes dashboards
-- **Kubernetes / Compute Resources / Cluster** — overall CPU and memory usage across the cluster
-- **Kubernetes / Compute Resources / Node** — per-node breakdown
-- **Kubernetes / Compute Resources / Namespace** — per-namespace resource usage (useful for seeing what Pi-hole vs Longhorn vs monitoring is consuming)
-- **Kubernetes / Compute Resources / Pod** — per-pod CPU/memory over time
-- **Kubernetes / Persistent Volumes** — PVC usage (see how full your Longhorn volumes are)
-
-### Node dashboards
-- **Node Exporter / Nodes** — full hardware metrics: CPU temperature (if available), disk I/O, network throughput, RAM usage
-
-### Kubernetes state dashboards
-- **Kubernetes / API server** — API server request rates and latencies
-- **Kubernetes / Kubelet** — node agent health
 
 ## What you can do with it
 
@@ -106,6 +132,12 @@ irate(node_network_receive_bytes_total{device="eth0"}[5m])
 
 # Number of running pods
 sum(kube_pod_status_phase{phase="Running"})
+
+# Internet download speed (Mbps)
+speedtest_download_bits_per_second / 1e6
+
+# Probe success for all blackbox targets
+probe_success
 ```
 
 ### Alerts
@@ -127,8 +159,14 @@ To set up: **Alerting → Alert rules → New alert rule**, then set a contact p
 Go to **Explore** (compass icon in the sidebar), select the Prometheus data source, and run PromQL queries directly. Useful for finding out what metrics are available:
 
 ```promql
-# List all metrics exported by Node Exporter
+# All Node Exporter metrics
 {job="node-exporter"}
+
+# Blackbox probe metrics
+{job=~"blackbox.*"}
+
+# Speedtest metrics
+{__name__=~"speedtest_.*"}
 
 # Find metrics about a specific pod
 {pod=~"pihole.*"}
