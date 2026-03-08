@@ -1,0 +1,17 @@
+---
+# dudlab-cluster master playbook
+# Runs all phases in order. Run individual playbooks for targeted changes.
+#
+# Usage:
+#   ansible-playbook site.yml              # full stack
+#   ansible-playbook playbooks/ping.yml    # connectivity check
+#   ansible-playbook playbooks/update.yml  # system updates only
+
+- import_playbook: playbooks/install_packages.yml
+- import_playbook: playbooks/setup_firewall.yml
+- import_playbook: playbooks/provision_k3s.yml
+- import_playbook: playbooks/deploy_metallb.yml
+- import_playbook: playbooks/deploy_longhorn.yml
+- import_playbook: playbooks/deploy_portainer.yml
+- import_playbook: playbooks/deploy_grafana.yml
+- import_playbook: playbooks/deploy_pihole.yml

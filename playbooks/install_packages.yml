@@ -3,7 +3,7 @@
   hosts: dudlab_cluster
   become: yes
   tasks:
-    - name: Install utilities apt
+    - name: Install utilities
       ansible.builtin.apt:
         name:
           - curl
@@ -11,16 +11,25 @@
           - htop
           - git
           - avahi-daemon
-          - ansible
-          - dash
-          - gzip
           - net-tools
-          - postgresql
           - ufw
-          - docker
+          # Required by Longhorn for persistent storage
+          - open-iscsi
+          - nfs-common
         state: present
-    - name: Install utilities snap
-      ansible.builtin.snap:
-        name:
-          - docker
-        state: present
+        update_cache: yes
+
+    - name: Enable and start iscsid (required by Longhorn)
+      ansible.builtin.systemd:
+        name: iscsid
+        state: started
+        enabled: yes
+
+    - name: Ensure /etc/resolv.conf is a static file with a reliable nameserver
+      ansible.builtin.copy:
+        dest: /etc/resolv.conf
+        content: "nameserver 8.8.8.8\n"
+        owner: root
+        group: root
+        mode: '0644'
+        force: yes

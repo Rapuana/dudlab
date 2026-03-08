@@ -1,0 +1,54 @@
+---
+- name: Deploy Prometheus + Grafana monitoring stack
+  hosts: k3s_master_node
+  become: yes
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  tasks:
+    - name: Add prometheus-community Helm repo
+      command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      changed_when: false
+
+    - name: Update Helm repos
+      command: helm repo update
+      changed_when: false
+
+    - name: Create monitoring namespace
+      command: kubectl create namespace monitoring --dry-run=client -o yaml
+      register: monitoring_ns
+      changed_when: false
+
+    - name: Apply monitoring namespace
+      command: kubectl apply -f -
+      args:
+        stdin: "{{ monitoring_ns.stdout }}"
+      changed_when: false
+
+    - name: Install kube-prometheus-stack via Helm
+      command:
+        cmd: >
+          helm upgrade --install kube-prometheus-stack
+          prometheus-community/kube-prometheus-stack
+          --namespace monitoring
+          --set grafana.service.type=LoadBalancer
+          --set grafana.service.loadBalancerIP={{ grafana_ip }}
+          --set grafana.adminPassword={{ grafana_admin_password }}
+          --wait --timeout 10m
+      changed_when: false
+
+    - name: Wait for Grafana to be ready
+      command: >
+        kubectl wait deployment kube-prometheus-stack-grafana
+        --namespace monitoring
+        --for=condition=Available
+        --timeout=300s
+      changed_when: false
+
+    - name: Display Grafana access info
+      debug:
+        msg:
+          - "Grafana deployed."
+          - "URL: http://{{ grafana_ip }}"
+          - "Username: admin"
+          - "Password: (see vault.yml)"
+          - "Change the password after first login."

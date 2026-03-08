@@ -1,0 +1,8 @@
+# Ansible vault password file — never commit this
+.vault_pass
+
+# Ansible retry files
+*.retry
+
+# Local overrides
+*.local.yml

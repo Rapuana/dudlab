@@ -3,58 +3,83 @@
   hosts: k3s_master_node
   become: yes
   tasks:
+    - name: Check if k3s server is already installed
+      stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+
     - name: Install k3s server on master node
-      shell: curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--node-ip=192.168.0.38 --tls-san=dudley-server-1.local" sh -
-      args:
-        creates: /usr/local/bin/k3s
+      shell: >
+        curl -sfL https://get.k3s.io |
+        INSTALL_K3S_EXEC="--node-ip={{ k3s_master_ip }} --tls-san={{ inventory_hostname }}" sh -
+      when: not k3s_binary.stat.exists
+
+    - name: Wait for k3s to be ready
+      command: k3s kubectl get nodes
+      register: k3s_ready
+      until: k3s_ready.rc == 0
+      retries: 15
+      delay: 10
 
     - name: Retrieve the k3s join token from master
       shell: cat /var/lib/rancher/k3s/server/node-token
       register: k3s_token
+      changed_when: false
 
-    - name: Save join token as a host fact on master
+    - name: Save join token as a host fact
       set_fact:
         k3s_join_token: "{{ k3s_token.stdout }}"
-
-    - name: Display join token (for debugging)
-      debug:
-        msg: "K3s join token is: {{ k3s_join_token }}"
 
 - name: Join worker nodes to k3s cluster
   hosts: k3s_worker_nodes
   become: yes
   vars:
-    # Use the inventory hostname of the master node.
-    k3s_master: "192.168.0.38"
-    # Retrieve the join token from the master node’s host facts.
+    k3s_master: "{{ k3s_master_ip }}"
     k3s_token: "{{ hostvars[groups['k3s_master_node'][0]].k3s_join_token }}"
   tasks:
-    - name: Remove existing k3s-agent binary (if any) to force a re-join
-      file:
-        path: /usr/local/bin/k3s-agent
-        state: absent
+    - name: Check if k3s agent service is active
+      command: systemctl is-active k3s-agent
+      register: k3s_agent_status
+      failed_when: false
+      changed_when: false
 
-    - name: Stop and disable existing k3s-agent service if running
-      systemd:
-        name: k3s-agent
-        state: stopped
-        enabled: no
-      ignore_errors: yes
-
-    - name: Install k3s agent on worker node with correct token
+    - name: Install k3s agent and join cluster
       shell: |
         curl -sfL https://get.k3s.io | \
         K3S_URL=https://{{ k3s_master }}:6443 \
         K3S_TOKEN={{ k3s_token }} sh -
-      args:
-        creates: /usr/local/bin/k3s-agent
+      when: k3s_agent_status.stdout != 'active'
 
-    - name: Display join attempt output for debugging (optional)
+    - name: Wait for k3s-agent service to be active
+      command: systemctl is-active k3s-agent
+      register: agent_active
+      until: agent_active.stdout == 'active'
+      retries: 15
+      delay: 10
+
+- name: Fetch kubeconfig to control machine
+  hosts: k3s_master_node
+  become: yes
+  tasks:
+    - name: Read kubeconfig from master
+      slurp:
+        src: /etc/rancher/k3s/k3s.yaml
+      register: kubeconfig_raw
+
+    - name: Write kubeconfig locally with correct server address
+      copy:
+        content: "{{ kubeconfig_raw.content | b64decode | replace('127.0.0.1', k3s_master_ip) }}"
+        dest: "{{ lookup('env', 'HOME') }}/.kube/config"
+        mode: '0600'
+      delegate_to: localhost
+      become: no
+
+    - name: Verify cluster is healthy from control machine
+      command: kubectl get nodes --no-headers
+      delegate_to: localhost
+      become: no
+      register: node_list
+
+    - name: Display cluster nodes
       debug:
-        msg: "Attempted to join worker node using token {{ k3s_token }}"
-
-    - name: Confirm agent environment (optional)
-      command: systemctl show k3s-agent
-      register: agent_env
-    - debug:
-        var: agent_env.stdout_lines
+        var: node_list.stdout_lines

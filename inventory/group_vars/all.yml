@@ -1,0 +1,21 @@
+---
+# Cluster-wide variables
+
+cluster_name: dudlab
+
+# Master node IP — used by worker nodes to join the cluster
+k3s_master_ip: 192.168.0.38
+
+# MetalLB IP pool — allocate specific IPs from this range to services
+# Full range: 192.168.0.240 - 192.168.0.250
+metallb_ip_pool: "192.168.0.240-192.168.0.250"
+
+# Fixed IPs for key services (must be within metallb_ip_pool)
+pihole_ip: "192.168.0.241"
+portainer_ip: "192.168.0.242"
+grafana_ip: "192.168.0.243"
+longhorn_ip: "192.168.0.244"
+
+# Sensitive variables — sourced from vault.yml (ansible-vault encrypted)
+pihole_password: "{{ vault_pihole_password }}"
+grafana_admin_password: "{{ vault_grafana_admin_password }}"

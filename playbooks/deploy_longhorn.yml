@@ -1,0 +1,90 @@
+---
+- name: Deploy Longhorn persistent storage
+  hosts: k3s_master_node
+  become: yes
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  tasks:
+    - name: Check if Helm is installed
+      command: which helm
+      register: helm_check
+      failed_when: false
+      changed_when: false
+
+    - name: Install Helm
+      shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      when: helm_check.rc != 0
+
+    - name: Add Longhorn Helm repo
+      command: helm repo add longhorn https://charts.longhorn.io
+      changed_when: false
+
+    - name: Update Helm repos
+      command: helm repo update
+      changed_when: false
+
+    - name: Create Longhorn namespace
+      command: kubectl create namespace longhorn-system --dry-run=client -o yaml
+      register: longhorn_ns
+      changed_when: false
+
+    - name: Apply Longhorn namespace
+      command: kubectl apply -f -
+      args:
+        stdin: "{{ longhorn_ns.stdout }}"
+      changed_when: false
+
+    - name: Install Longhorn via Helm
+      command: >
+        helm upgrade --install longhorn longhorn/longhorn
+        --namespace longhorn-system
+        --set defaultSettings.defaultReplicaCount=2
+        --wait --timeout 10m
+      changed_when: false
+
+    - name: Create Longhorn UI LoadBalancer service
+      command: kubectl apply -f -
+      args:
+        stdin: |
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: longhorn-ui-lb
+            namespace: longhorn-system
+          spec:
+            type: LoadBalancer
+            loadBalancerIP: {{ longhorn_ip }}
+            selector:
+              app: longhorn-ui
+            ports:
+              - name: http
+                port: 80
+                targetPort: http
+      changed_when: false
+
+    - name: Wait for Longhorn to be ready
+      command: >
+        kubectl wait deployment longhorn-ui
+        --namespace longhorn-system
+        --for=condition=Available
+        --timeout=300s
+      changed_when: false
+
+    - name: Set Longhorn as default StorageClass
+      command: >
+        kubectl patch storageclass local-path
+        -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+      failed_when: false
+      changed_when: false
+
+    - name: Confirm Longhorn is default StorageClass
+      command: kubectl get storageclass
+      register: sc_status
+      changed_when: false
+
+    - name: Display StorageClass status
+      debug:
+        msg:
+          - "Longhorn deployed. Storage classes:"
+          - "{{ sc_status.stdout_lines }}"
+          - "Longhorn UI available at http://{{ longhorn_ip }}"
