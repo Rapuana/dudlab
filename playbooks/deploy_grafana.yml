@@ -1,35 +1,36 @@
 ---
 - name: Deploy Prometheus + Grafana monitoring stack
   hosts: k3s_master_node
-  become: yes
+  become: true
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   tasks:
     - name: Add prometheus-community Helm repo
-      command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      ansible.builtin.command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
       changed_when: false
 
     - name: Update Helm repos
-      command: helm repo update
+      ansible.builtin.command: helm repo update
       changed_when: false
 
     - name: Create monitoring namespace
-      command: kubectl create namespace monitoring --dry-run=client -o yaml
+      ansible.builtin.command: kubectl create namespace monitoring --dry-run=client -o yaml
       register: monitoring_ns
       changed_when: false
 
     - name: Apply monitoring namespace
-      command: kubectl apply -f -
+      ansible.builtin.command: kubectl apply -f -
       args:
         stdin: "{{ monitoring_ns.stdout }}"
       changed_when: false
 
     - name: Install kube-prometheus-stack via Helm
-      command:
+      ansible.builtin.command:
         cmd: >
           helm upgrade --install kube-prometheus-stack
           prometheus-community/kube-prometheus-stack
           --namespace monitoring
+          --version {{ kube_prometheus_stack_chart_version }}
           --set grafana.service.type=LoadBalancer
           --set grafana.service.loadBalancerIP={{ grafana_ip }}
           --set grafana.adminPassword={{ grafana_admin_password }}
@@ -37,7 +38,7 @@
       changed_when: false
 
     - name: Wait for Grafana to be ready
-      command: >
+      ansible.builtin.command: >
         kubectl wait deployment kube-prometheus-stack-grafana
         --namespace monitoring
         --for=condition=Available
@@ -45,7 +46,7 @@
       changed_when: false
 
     - name: Display Grafana access info
-      debug:
+      ansible.builtin.debug:
         msg:
           - "Grafana deployed."
           - "URL: http://{{ grafana_ip }}"

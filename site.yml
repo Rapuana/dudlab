@@ -7,11 +7,26 @@
 #   ansible-playbook playbooks/ping.yml    # connectivity check
 #   ansible-playbook playbooks/update.yml  # system updates only
 
-- import_playbook: playbooks/install_packages.yml
-- import_playbook: playbooks/setup_firewall.yml
-- import_playbook: playbooks/provision_k3s.yml
-- import_playbook: playbooks/deploy_metallb.yml
-- import_playbook: playbooks/deploy_longhorn.yml
-- import_playbook: playbooks/deploy_portainer.yml
-- import_playbook: playbooks/deploy_grafana.yml
-- import_playbook: playbooks/deploy_pihole.yml
+- name: Install packages
+  import_playbook: playbooks/install_packages.yml
+
+- name: Configure firewall
+  import_playbook: playbooks/setup_firewall.yml
+
+- name: Provision k3s cluster
+  import_playbook: playbooks/provision_k3s.yml
+
+- name: Deploy MetalLB
+  import_playbook: playbooks/deploy_metallb.yml
+
+- name: Deploy Longhorn
+  import_playbook: playbooks/deploy_longhorn.yml
+
+- name: Deploy Portainer
+  import_playbook: playbooks/deploy_portainer.yml
+
+- name: Deploy Grafana
+  import_playbook: playbooks/deploy_grafana.yml
+
+- name: Deploy Pi-hole
+  import_playbook: playbooks/deploy_pihole.yml

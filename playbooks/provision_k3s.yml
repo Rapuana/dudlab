@@ -1,85 +1,106 @@
 ---
 - name: Install k3s master node
   hosts: k3s_master_node
-  become: yes
+  become: true
   tasks:
     - name: Check if k3s server is already installed
-      stat:
+      ansible.builtin.stat:
         path: /usr/local/bin/k3s
       register: k3s_binary
 
-    - name: Install k3s server on master node
-      shell: >
-        curl -sfL https://get.k3s.io |
-        INSTALL_K3S_EXEC="--node-ip={{ k3s_master_ip }} --tls-san={{ inventory_hostname }}" sh -
+    - name: Download k3s install script
+      ansible.builtin.get_url:
+        url: https://get.k3s.io
+        dest: /tmp/install-k3s.sh
+        mode: '0755'
       when: not k3s_binary.stat.exists
 
+    - name: Install k3s server on master node
+      ansible.builtin.command: /tmp/install-k3s.sh
+      environment:
+        INSTALL_K3S_VERSION: "{{ k3s_version }}"
+        INSTALL_K3S_EXEC: "--node-ip={{ k3s_master_ip }} --tls-san={{ inventory_hostname }}"
+      when: not k3s_binary.stat.exists
+      changed_when: not k3s_binary.stat.exists
+
     - name: Wait for k3s to be ready
-      command: k3s kubectl get nodes
+      ansible.builtin.command: k3s kubectl get nodes
       register: k3s_ready
       until: k3s_ready.rc == 0
       retries: 15
       delay: 10
+      changed_when: false
 
     - name: Retrieve the k3s join token from master
-      shell: cat /var/lib/rancher/k3s/server/node-token
+      ansible.builtin.command: cat /var/lib/rancher/k3s/server/node-token
       register: k3s_token
       changed_when: false
 
     - name: Save join token as a host fact
-      set_fact:
+      ansible.builtin.set_fact:
         k3s_join_token: "{{ k3s_token.stdout }}"
 
 - name: Join worker nodes to k3s cluster
   hosts: k3s_worker_nodes
-  become: yes
+  become: true
   vars:
     k3s_master: "{{ k3s_master_ip }}"
     k3s_token: "{{ hostvars[groups['k3s_master_node'][0]].k3s_join_token }}"
   tasks:
     - name: Check if k3s agent service is active
-      command: systemctl is-active k3s-agent
+      ansible.builtin.command: systemctl is-active k3s-agent  # noqa: command-instead-of-module
       register: k3s_agent_status
       failed_when: false
       changed_when: false
 
-    - name: Install k3s agent and join cluster
-      shell: |
-        curl -sfL https://get.k3s.io | \
-        K3S_URL=https://{{ k3s_master }}:6443 \
-        K3S_TOKEN={{ k3s_token }} sh -
+    - name: Download k3s install script
+      ansible.builtin.get_url:
+        url: https://get.k3s.io
+        dest: /tmp/install-k3s.sh
+        mode: '0755'
       when: k3s_agent_status.stdout != 'active'
 
+    - name: Install k3s agent and join cluster
+      ansible.builtin.command: /tmp/install-k3s.sh
+      environment:
+        INSTALL_K3S_VERSION: "{{ k3s_version }}"
+        K3S_URL: "https://{{ k3s_master }}:6443"
+        K3S_TOKEN: "{{ k3s_token }}"
+      when: k3s_agent_status.stdout != 'active'
+      changed_when: k3s_agent_status.stdout != 'active'
+
     - name: Wait for k3s-agent service to be active
-      command: systemctl is-active k3s-agent
+      ansible.builtin.command: systemctl is-active k3s-agent  # noqa: command-instead-of-module
       register: agent_active
       until: agent_active.stdout == 'active'
       retries: 15
       delay: 10
+      changed_when: false
 
 - name: Fetch kubeconfig to control machine
   hosts: k3s_master_node
-  become: yes
+  become: true
   tasks:
     - name: Read kubeconfig from master
-      slurp:
+      ansible.builtin.slurp:
         src: /etc/rancher/k3s/k3s.yaml
       register: kubeconfig_raw
 
     - name: Write kubeconfig locally with correct server address
-      copy:
+      ansible.builtin.copy:
         content: "{{ kubeconfig_raw.content | b64decode | replace('127.0.0.1', k3s_master_ip) }}"
         dest: "{{ lookup('env', 'HOME') }}/.kube/config"
         mode: '0600'
       delegate_to: localhost
-      become: no
+      become: false
 
     - name: Verify cluster is healthy from control machine
-      command: kubectl get nodes --no-headers
+      ansible.builtin.command: kubectl get nodes --no-headers
       delegate_to: localhost
-      become: no
+      become: false
       register: node_list
+      changed_when: false
 
     - name: Display cluster nodes
-      debug:
+      ansible.builtin.debug:
         var: node_list.stdout_lines

@@ -1,0 +1,41 @@
+### REQUIRED
+namespace: dudley
+name: dudlab_cluster
+version: 1.0.0
+readme: README.md
+authors:
+  - Samuel Dudley <dudley.physics@gmail.com>
+
+### OPTIONAL
+description: >
+  Ansible playbooks to provision and manage a self-hosted k3s Kubernetes homelab.
+  Deploys MetalLB for load balancing, Longhorn for persistent storage, Pi-hole for
+  network-wide DNS ad-blocking, Portainer for cluster management, and
+  Prometheus + Grafana for monitoring.
+
+license:
+  - Apache-2.0
+
+tags:
+  - homelab
+  - helm
+  - k3s
+  - k3s-cluster
+  - kubernetes
+  - longhorn
+  - metallb
+  - monitoring
+  - pihole
+  - self-hosted
+
+dependencies:
+  community.general: '*'
+
+# Links
+repository: 'https://github.com/Rapuana/dudlab'
+documentation: 'https://github.com/Rapuana/dudlab/blob/main/README.md'
+issues: 'https://github.com/Rapuana/dudlab/issues'
+
+build_ignore:
+  - .vault_pass
+  - '*.retry'

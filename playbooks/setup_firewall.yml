@@ -1,7 +1,7 @@
 ---
 - name: Configure firewall on dudlab cluster
   hosts: dudlab_cluster
-  become: yes
+  become: true
   tasks:
     - name: Install UFW
       ansible.builtin.apt:
@@ -9,50 +9,51 @@
         state: present
 
     - name: Allow SSH connections
-      ansible.builtin.ufw:
+      community.general.ufw:
         rule: allow
         port: 22
         proto: tcp
 
     - name: Allow Kubernetes API server access on port 6443/tcp
-      ansible.builtin.ufw:
+      community.general.ufw:
         rule: allow
         port: 6443
         proto: tcp
 
     - name: Allow kubelet API (node communication)
-      ansible.builtin.ufw:
+      community.general.ufw:
         rule: allow
         port: 10250
         proto: tcp
 
     - name: Allow Flannel VXLAN overlay network
-      ansible.builtin.ufw:
+      community.general.ufw:
         rule: allow
         port: 8472
         proto: udp
 
     - name: Allow MetalLB L2 memberlist sync
-      ansible.builtin.ufw:
+      community.general.ufw:
         rule: allow
         port: 7946
         proto: any
 
     - name: Allow NodePort service range
-      ansible.builtin.ufw:
+      community.general.ufw:
         rule: allow
         port: 30000:32767
         proto: tcp
 
     - name: Enable UFW
-      ansible.builtin.ufw:
+      community.general.ufw:
         state: enabled
 
     - name: Check UFW status
-      become: yes
-      command: ufw status numbered
+      become: true
+      ansible.builtin.command: ufw status numbered
       register: ufw_status_output
+      changed_when: false
 
     - name: Display UFW status
-      debug:
+      ansible.builtin.debug:
         var: ufw_status_output.stdout

@@ -1,34 +1,35 @@
 ---
 - name: Deploy Pi-hole DNS ad-blocker
   hosts: k3s_master_node
-  become: yes
+  become: true
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   tasks:
     - name: Add mojo2600 Pi-hole Helm repo
-      command: helm repo add mojo2600 https://mojo2600.github.io/pihole-kubernetes/
+      ansible.builtin.command: helm repo add mojo2600 https://mojo2600.github.io/pihole-kubernetes/
       changed_when: false
 
     - name: Update Helm repos
-      command: helm repo update
+      ansible.builtin.command: helm repo update
       changed_when: false
 
     - name: Create pihole namespace
-      command: kubectl create namespace pihole --dry-run=client -o yaml
+      ansible.builtin.command: kubectl create namespace pihole --dry-run=client -o yaml
       register: pihole_ns
       changed_when: false
 
     - name: Apply pihole namespace
-      command: kubectl apply -f -
+      ansible.builtin.command: kubectl apply -f -
       args:
         stdin: "{{ pihole_ns.stdout }}"
       changed_when: false
 
     - name: Install Pi-hole via Helm
-      command:
+      ansible.builtin.command:
         cmd: >
           helm upgrade --install pihole mojo2600/pihole
           --namespace pihole
+          --version {{ pihole_chart_version }}
           --set serviceWeb.type=LoadBalancer
           --set serviceWeb.loadBalancerIP={{ pihole_ip }}
           --set "serviceWeb.annotations.metallb\.universe\.tf/allow-shared-ip=pihole"
@@ -42,19 +43,31 @@
       changed_when: false
 
     - name: Wait for Pi-hole to be ready
-      command: >
+      ansible.builtin.command: >
         kubectl wait deployment pihole
         --namespace pihole
         --for=condition=Available
         --timeout=180s
       changed_when: false
 
+    - name: Point cluster nodes at Pi-hole for DNS
+      ansible.builtin.copy:
+        dest: /etc/resolv.conf
+        content: "nameserver {{ pihole_ip }}\n"
+        owner: root
+        group: root
+        mode: '0644'
+        force: true
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['dudlab_cluster'] }}"
+
     - name: Display Pi-hole access info
-      debug:
+      ansible.builtin.debug:
         msg:
           - "Pi-hole deployed."
           - "Admin UI: http://{{ pihole_ip }}/admin"
           - "DNS server IP: {{ pihole_ip }}"
           - "Admin password: (see vault.yml)"
+          - "Cluster nodes DNS updated to {{ pihole_ip }}."
           - "Point your router's DNS to {{ pihole_ip }} to enable network-wide ad blocking."
           - "Change the password after first login."

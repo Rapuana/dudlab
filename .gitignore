@@ -6,3 +6,6 @@
 
 # Local overrides
 *.local.yml
+
+# Downloaded Ansible collections — install with: make install-deps
+.ansible/

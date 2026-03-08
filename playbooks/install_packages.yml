@@ -1,7 +1,7 @@
 ---
 - name: Install common packages on dudlab cluster
   hosts: dudlab_cluster
-  become: yes
+  become: true
   tasks:
     - name: Install utilities
       ansible.builtin.apt:
@@ -17,13 +17,13 @@
           - open-iscsi
           - nfs-common
         state: present
-        update_cache: yes
+        update_cache: true
 
     - name: Enable and start iscsid (required by Longhorn)
       ansible.builtin.systemd:
         name: iscsid
         state: started
-        enabled: yes
+        enabled: true
 
     - name: Ensure /etc/resolv.conf is a static file with a reliable nameserver
       ansible.builtin.copy:
@@ -32,4 +32,4 @@
         owner: root
         group: root
         mode: '0644'
-        force: yes
+        force: true

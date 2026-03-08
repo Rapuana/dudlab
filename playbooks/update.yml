@@ -1,11 +1,11 @@
 ---
 - name: Update and upgrade packages on dudlab-cluster
   hosts: dudlab_cluster
-  become: yes  # Run as sudo
+  become: true
   tasks:
     - name: Update APT package list
       ansible.builtin.apt:
-        update_cache: yes
+        update_cache: true
 
     - name: Upgrade all packages
       ansible.builtin.apt:
@@ -13,4 +13,4 @@
 
     - name: Remove unnecessary packages
       ansible.builtin.apt:
-        autoremove: yes
+        autoremove: true

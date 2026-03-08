@@ -1,18 +1,18 @@
 ---
 - name: Deploy MetalLB load balancer
   hosts: k3s_master_node
-  become: yes
+  become: true
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   tasks:
     - name: Apply MetalLB manifest
-      command: >
+      ansible.builtin.command: >
         kubectl apply -f
         https://raw.githubusercontent.com/metallb/metallb/v0.15.2/config/manifests/metallb-native.yaml
       changed_when: false
 
     - name: Wait for MetalLB controller to be ready
-      command: >
+      ansible.builtin.command: >
         kubectl wait deployment controller
         --namespace metallb-system
         --for=condition=Available
@@ -20,20 +20,20 @@
       changed_when: false
 
     - name: Copy MetalLB IP pool config to master
-      copy:
+      ansible.builtin.copy:
         src: ../roles/metallb/files/metallb-config.yaml
         dest: /tmp/metallb-config.yaml
         mode: '0644'
 
     - name: Apply MetalLB IP pool and L2 advertisement
-      command: kubectl apply -f /tmp/metallb-config.yaml
+      ansible.builtin.command: kubectl apply -f /tmp/metallb-config.yaml
       changed_when: false
 
     - name: Verify MetalLB IP pool is created
-      command: kubectl get ipaddresspool -n metallb-system
+      ansible.builtin.command: kubectl get ipaddresspool -n metallb-system
       register: ip_pool_status
       changed_when: false
 
     - name: Display MetalLB IP pool status
-      debug:
+      ansible.builtin.debug:
         var: ip_pool_status.stdout_lines

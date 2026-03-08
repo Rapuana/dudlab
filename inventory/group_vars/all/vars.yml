@@ -16,6 +16,19 @@ portainer_ip: "192.168.0.242"
 grafana_ip: "192.168.0.243"
 longhorn_ip: "192.168.0.244"
 
+# --- Version pins ---
+# These lock the cluster to known-good versions and prevent silent upgrades on re-runs.
+# IMPORTANT: verify these match your live cluster before changing them.
+#   k3s:  ssh dudley-server-1.local 'k3s --version'
+#   helm: ssh dudley-server-1.local 'helm version --short'
+#   charts: kubectl get pod -A (check image tags) or helm list -A -o yaml
+k3s_version: "v1.32.5+k3s1"
+helm_version: "v3.20.0"
+longhorn_chart_version: "1.11.0"
+portainer_chart_version: "239.0.2"
+kube_prometheus_stack_chart_version: "82.10.1"
+pihole_chart_version: "2.35.0"
+
 # Sensitive variables — sourced from vault.yml (ansible-vault encrypted)
 pihole_password: "{{ vault_pihole_password }}"
 grafana_admin_password: "{{ vault_grafana_admin_password }}"

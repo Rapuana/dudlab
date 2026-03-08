@@ -1,41 +1,42 @@
 ---
 - name: Deploy Portainer CE web UI
   hosts: k3s_master_node
-  become: yes
+  become: true
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   tasks:
     - name: Add Portainer Helm repo
-      command: helm repo add portainer https://portainer.github.io/k8s/
+      ansible.builtin.command: helm repo add portainer https://portainer.github.io/k8s/
       changed_when: false
 
     - name: Update Helm repos
-      command: helm repo update
+      ansible.builtin.command: helm repo update
       changed_when: false
 
     - name: Create Portainer namespace
-      command: kubectl create namespace portainer --dry-run=client -o yaml
+      ansible.builtin.command: kubectl create namespace portainer --dry-run=client -o yaml
       register: portainer_ns
       changed_when: false
 
     - name: Apply Portainer namespace
-      command: kubectl apply -f -
+      ansible.builtin.command: kubectl apply -f -
       args:
         stdin: "{{ portainer_ns.stdout }}"
       changed_when: false
 
     - name: Install Portainer CE via Helm
-      command:
+      ansible.builtin.command:
         cmd: >
           helm upgrade --install portainer portainer/portainer
           --namespace portainer
+          --version {{ portainer_chart_version }}
           --set service.type=LoadBalancer
           --set service.loadBalancerIP={{ portainer_ip }}
           --wait --timeout 5m
       changed_when: false
 
     - name: Wait for Portainer to be ready
-      command: >
+      ansible.builtin.command: >
         kubectl wait deployment portainer
         --namespace portainer
         --for=condition=Available
@@ -43,7 +44,7 @@
       changed_when: false
 
     - name: Display Portainer access info
-      debug:
+      ansible.builtin.debug:
         msg:
           - "Portainer deployed."
           - "URL: https://{{ portainer_ip }}:9443"
